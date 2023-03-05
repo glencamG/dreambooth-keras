@@ -123,7 +123,7 @@ class DatasetUtils:
 
         return new_instance_image_paths
 
-    def _download_images(self) -> Tuple[List, List]:
+    def _load_images(self) -> Tuple[List, List]:
         """Downloads instance and class image archives from the URLs and
         un-archives them."""
         """
@@ -212,7 +212,7 @@ class DatasetUtils:
         6. Assemble the datasets.
         """
         print("Downloading instance and class images...")
-        instance_image_paths, class_image_paths = self._download_images()
+        instance_image_paths, class_image_paths = self._load_images()
 
         # Prepare captions.
         instance_captions, class_captions = self._get_captions(

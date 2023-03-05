@@ -126,6 +126,7 @@ class DatasetUtils:
     def _download_images(self) -> Tuple[List, List]:
         """Downloads instance and class image archives from the URLs and
         un-archives them."""
+        """
         instance_images_root = tf.keras.utils.get_file(
             origin=self.instance_images_url,
             untar=True,
@@ -134,6 +135,9 @@ class DatasetUtils:
             origin=self.class_images_url,
             untar=True,
         )
+        """
+        instance_images_root = self.instance_images_url
+        class_images_root = self.class_images_url
 
         instance_image_paths = list(paths.list_images(instance_images_root))
         class_image_paths = list(paths.list_images(class_images_root))

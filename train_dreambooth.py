@@ -11,8 +11,8 @@ import math
 import tensorflow as tf
 from keras_cv.models.stable_diffusion.diffusion_model import DiffusionModel
 from keras_cv.models.stable_diffusion.image_encoder import ImageEncoder
-#from keras_cv.models.stable_diffusion.noise_scheduler import NoiseScheduler
-from ddim import DDIMScheduler as NoiseScheduler
+from keras_cv.models.stable_diffusion.noise_scheduler import NoiseScheduler
+# from ddim import DDIMScheduler as NoiseScheduler
 
 import tensorflow as tf
 from tensorflow.keras import mixed_precision
@@ -46,11 +46,11 @@ def get_optimizer(
 
 
 def prepare_trainer(
-    img_resolution: int, train_text_encoder: bool, use_mp: bool, max_train_steps: int, **kwargs
+    img_resolution: int, train_text_encoder: bool, use_mp: bool, optimizer_kwargs: dict, **kwargs
 ):
     """Instantiates and compiles `DreamBoothTrainer` for training."""
     image_encoder = ImageEncoder(img_resolution, img_resolution)
-    
+
 
     dreambooth_trainer = DreamBoothTrainer(
         diffusion_model=DiffusionModel(
@@ -62,13 +62,13 @@ def prepare_trainer(
             image_encoder.input,
             image_encoder.layers[-2].output,
         ),
-        noise_scheduler = NoiseScheduler(train_timesteps=max_train_steps),
+        noise_scheduler=NoiseScheduler(),
         train_text_encoder=train_text_encoder,
         use_mixed_precision=use_mp,
         **kwargs,
     )
 
-    optimizer = get_optimizer()
+    optimizer = get_optimizer(**optimizer_kwargs)
     dreambooth_trainer.compile(optimizer=optimizer, loss="mse")
     print("DreamBooth trainer initialized and compiled.")
 
@@ -145,10 +145,6 @@ def run(args):
     # Set random seed for reproducibility
     tf.keras.utils.set_random_seed(args.seed)
 
-    #dreambooth_trainer = prepare_trainer(args.img_resolution, args.train_text_encoder, args.mp, args.max_train_steps)
-    dreambooth_trainer = prepare_trainer(args.img_resolution, args.train_text_encoder, args.mp, args.max_train_steps)
-
-
     validation_prompts = [f"A photo of {args.unique_id} {args.class_category} in a bucket"]
     if args.validation_prompts is not None:
         validation_prompts = args.validation_prompts
@@ -177,8 +173,15 @@ def run(args):
 
     print("Initializing trainer...")
     ckpt_path_prefix = run_name
+    optimizer_kwargs = {
+        "lr": args.lr,
+        "beta_1": args.beta_1,
+        "beta_2": args.beta_2,
+        "epsilon": args.epsilon,
+        "weight_decay": args.wd,
+    }
     dreambooth_trainer = prepare_trainer(
-        args.img_resolution, args.train_text_encoder, args.mp, max_train_steps=args.max_train_steps
+        args.img_resolution, args.train_text_encoder, args.mp, optimizer_kwargs
     )
 
     callbacks = [
@@ -200,9 +203,7 @@ def run(args):
             )
         )
 
-    #train(dreambooth_trainer, train_dataset, callbacks, args.max_train_steps)
-    train(dreambooth_trainer, train_dataset, max_train_steps=args.max_train_steps, callbacks=callbacks)
-
+    train(dreambooth_trainer, train_dataset, args.max_train_steps, callbacks)
 
     if args.log_wandb:
         wandb.finish()

@@ -146,6 +146,16 @@ class DatasetUtils:
         )
 
         return instance_image_paths, class_image_paths
+    
+    def _center_crop_with_resize(self, image: tf.Tensor, size: Tuple[int, int]) -> tf.Tensor:
+        shape = tf.shape(image)
+        h, w = shape[0], shape[1]
+        h, w = tf.cast(h, tf.int32), tf.cast(w, tf.int32)
+        if h > w:
+            cropped_image = tf.image.crop_to_bounding_box(image, (h - w) // 2, 0, w, w)
+        else:
+            cropped_image = tf.image.crop_to_bounding_box(image, 0, (w - h) // 2, h, h)
+        return tf.image.resize(cropped_image, size)
 
     def _process_image(
         self, image_path: tf.Tensor, text: tf.Tensor
@@ -154,7 +164,7 @@ class DatasetUtils:
         or embedded tokens."""
         image = tf.io.read_file(image_path)
         image = tf.io.decode_png(image, 3)
-        image = tf.image.resize(image, (self.img_height, self.img_width))
+        image = self._center_crop_with_resize(image, size=(self.img_height, self.img_width))
         return image, text
 
     def _apply_augmentation(

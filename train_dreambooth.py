@@ -12,6 +12,7 @@ import tensorflow as tf
 from keras_cv.models.stable_diffusion.diffusion_model import DiffusionModel
 from keras_cv.models.stable_diffusion.image_encoder import ImageEncoder
 from keras_cv.models.stable_diffusion.noise_scheduler import NoiseScheduler
+
 # from ddim import DDIMScheduler as NoiseScheduler
 
 import tensorflow as tf
@@ -46,15 +47,29 @@ def get_optimizer(
 
 
 def prepare_trainer(
-    img_resolution: int, train_text_encoder: bool, use_mp: bool, optimizer_kwargs: dict, **kwargs
+    img_resolution: int,
+    train_text_encoder: bool,
+    use_mp: bool,
+    pretrained_url_kwargs: dict,
+    optimizer_kwargs: dict,
+    **kwargs,
 ):
-    """Instantiates and compiles `DreamBoothTrainer` for training."""
-    image_encoder = ImageEncoder(img_resolution, img_resolution)
+    vae_weights_url = pretrained_url_kwargs["vae"]
+    model_weights_url = pretrained_url_kwargs["model"]
+    is_download_vae = vae_weights_url == None
+    is_download_model = model_weights_url == None
 
+    """Instantiates and compiles `DreamBoothTrainer` for training."""
+    image_encoder = ImageEncoder(
+        img_resolution, img_resolution, download_weights=is_download_vae
+    )
 
     dreambooth_trainer = DreamBoothTrainer(
         diffusion_model=DiffusionModel(
-            img_resolution, img_resolution, MAX_PROMPT_LENGTH
+            img_resolution,
+            img_resolution,
+            MAX_PROMPT_LENGTH,
+            download_weights=is_download_model,
         ),
         # Remove the top layer from the encoder, which cuts off
         # the variance and only returns the mean.
@@ -67,6 +82,13 @@ def prepare_trainer(
         use_mixed_precision=use_mp,
         **kwargs,
     )
+
+    if vae_weights_url:
+        vae_weights_fpath = tf.keras.utils.get_file(origin=vae_weights_url)
+        image_encoder.load_weights(vae_weights_fpath)
+    if model_weights_url:
+        model_weights_fpath = tf.keras.utils.get_file(origin=model_weights_url)
+        dreambooth_trainer.diffusion_model.load_weights(model_weights_fpath)
 
     optimizer = get_optimizer(**optimizer_kwargs)
     dreambooth_trainer.compile(optimizer=optimizer, loss="mse")
@@ -102,6 +124,9 @@ def parse_args():
     parser.add_argument("--unique_id", default="sks", type=str)
     parser.add_argument("--class_category", default="dog", type=str)
     parser.add_argument("--img_resolution", default=512, type=int)
+    # Model weights
+    parser.add_argument("--pretrained_model_url", default=None, type=str)
+    parser.add_argument("--pretrained_vae_url", default=None, type=str)
     # Optimization hyperparameters.
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--lr", default=5e-6, type=float)
@@ -122,7 +147,9 @@ def parse_args():
     )
     # Misc.
     parser.add_argument(
-        "--log_wandb", action="store_true", help="Whether to use Weights & Biases for experiment tracking.",
+        "--log_wandb",
+        action="store_true",
+        help="Whether to use Weights & Biases for experiment tracking.",
     )
     parser.add_argument(
         "--validation_prompts",
@@ -145,7 +172,9 @@ def run(args):
     # Set random seed for reproducibility
     tf.keras.utils.set_random_seed(args.seed)
 
-    validation_prompts = [f"A photo of {args.unique_id} {args.class_category} in a bucket"]
+    validation_prompts = [
+        f"A photo of {args.unique_id} {args.class_category} in a bucket"
+    ]
     if args.validation_prompts is not None:
         validation_prompts = args.validation_prompts
 
@@ -180,8 +209,16 @@ def run(args):
         "epsilon": args.epsilon,
         "weight_decay": args.wd,
     }
+    pretrained_url_kwargs = {
+        "vae": args.pretrained_vae_url,
+        "model": args.pretrained_model_url,
+    }
     dreambooth_trainer = prepare_trainer(
-        args.img_resolution, args.train_text_encoder, args.mp, optimizer_kwargs
+        args.img_resolution,
+        args.train_text_encoder,
+        args.mp,
+        pretrained_url_kwargs,
+        optimizer_kwargs,
     )
 
     callbacks = [

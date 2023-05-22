@@ -184,10 +184,10 @@ def run(args):
 
     if args.mp:
         print("Enabling mixed-precision...")
-        policy = mixed_precision.Policy("mixed_float16")
+        policy = mixed_precision.Policy("float16")
         mixed_precision.set_global_policy(policy)
-        assert policy.compute_dtype == "float16"
-        assert policy.variable_dtype == "float32"
+        #assert policy.compute_dtype == "float16"
+        #assert policy.variable_dtype == "float32"
 
     print("Initializing dataset...")
     data_util = DatasetUtils(
